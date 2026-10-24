@@ -6,7 +6,7 @@
   "publisher": "systonia",
   "license": "MIT OR Apache-2.0",
   "homepage": "https://tenma.dev",
-  "repository": "https://github.com/systonia/Tenma-VSCode",
+  "repository": "https://github.com/tenma-runtime/vscode",
   "engines": { "vscode": "^1.80.0" },
   "categories": ["Debuggers", "Programming Languages"],
   "keywords": ["php", "tenma", "debug"],
