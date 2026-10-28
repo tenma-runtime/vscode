@@ -86,6 +86,27 @@ exports.start = (context, output) => {
         return inTime(asked.request(method, { textDocument: { uri: document.uri.toString() }, ...params }), token);
     };
     const at = (position) => ({ position: { line: position.line, character: position.character } });
+    // VS Code asks the semantic token providers of a document newest first and takes the first answer that is not
+    // null. The PHP extension registers its provider once its own server runs, after this one, and answers for
+    // every PHP file: the colours of views and templates showed for a second and went. Registered again, this
+    // provider is the newest; it answers null for plain PHP, which leaves those files to the PHP extension.
+    // ponytail: registers again a few times after the start and on switching to a PHP file; a hook in VS Code for
+    // "another provider was added" would make it exact
+    let tokens = null;
+    let registered = 0;
+    const registerTokens = () => {
+        tokens?.dispose();
+        registered = Date.now();
+        tokens = vscode.languages.registerDocumentSemanticTokensProvider(SELECTOR, {
+            onDidChangeSemanticTokens: tokensChanged.event,
+            provideDocumentSemanticTokens: async (document, token) => {
+                const result = await ask('textDocument/semanticTokens/full', document, {}, token);
+                return result?.data?.length ? new vscode.SemanticTokens(new Uint32Array(result.data)) : null;
+            },
+        }, new vscode.SemanticTokensLegend(TOKEN_TYPES, []));
+    };
+    registerTokens();
+    for (const seconds of [3, 10, 30]) setTimeout(registerTokens, seconds * 1000);
     context.subscriptions.push(
         diagnostics,
         tokensChanged,
@@ -97,6 +118,9 @@ exports.start = (context, output) => {
         }),
         vscode.workspace.onDidOpenTextDocument((document) => (server ? server.sync(document) : document.languageId === 'php' && run())),
         vscode.workspace.onDidChangeTextDocument((event) => server?.sync(event.document)),
+        vscode.window.onDidChangeActiveTextEditor((editor) => {
+            if (editor?.document.languageId === 'php' && Date.now() - registered > 5000) registerTokens();
+        }),
         vscode.workspace.onDidSaveTextDocument((document) => server?.notify('textDocument/didSave', { textDocument: { uri: document.uri.toString() } })),
         vscode.workspace.onDidCloseTextDocument((document) => server?.close(document)),
         vscode.languages.registerCompletionItemProvider(SELECTOR, {
@@ -116,14 +140,7 @@ exports.start = (context, output) => {
                 return result ? new vscode.Hover(new vscode.MarkdownString(result.contents.value)) : null;
             },
         }),
-        vscode.languages.registerDocumentSemanticTokensProvider(SELECTOR, {
-            onDidChangeSemanticTokens: tokensChanged.event,
-            provideDocumentSemanticTokens: async (document, token) => {
-                const result = await ask('textDocument/semanticTokens/full', document, {}, token);
-                // VS Code takes the tokens of one provider only: nothing to colour leaves the PHP extension's
-                return result?.data?.length ? new vscode.SemanticTokens(new Uint32Array(result.data)) : null;
-            },
-        }, new vscode.SemanticTokensLegend(TOKEN_TYPES, [])),
+        { dispose: () => tokens?.dispose() },
         vscode.languages.registerDefinitionProvider(SELECTOR, {
             provideDefinition: async (document, position, token) => {
                 const result = await ask('textDocument/definition', document, at(position), token);
