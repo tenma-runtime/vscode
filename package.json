@@ -3,7 +3,7 @@
   "displayName": "Tenma",
   "description": "Debug PHP apps running under Tenma, and what tenma lsp adds to PHP files",
   "version": "0.1.0",
-  "publisher": "systonia",
+  "publisher": "tenma-runtime",
   "license": "MIT OR Apache-2.0",
   "homepage": "https://tenma.dev",
   "repository": "https://github.com/tenma-runtime/vscode",
